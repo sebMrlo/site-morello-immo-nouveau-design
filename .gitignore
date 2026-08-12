@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+
+# Sorties générées (les PDF de factures ne sont pas versionnés)
+out/*.pdf
+
+# OS
+.DS_Store
+Thumbs.db
