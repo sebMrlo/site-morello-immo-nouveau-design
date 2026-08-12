@@ -14,29 +14,67 @@ Produit dans `./out/` :
 
 et incrémente automatiquement la numérotation (`compteur.json`).
 
-## État du projet
+## Architecture
 
-> ⚠️ **Dépôt en cours d'initialisation.**
-> Les fichiers sources fournis par le prestataire ne sont pas encore déposés
-> (voir « Fichiers requis » ci-dessous). Tant qu'ils manquent, le parseur et le
-> test de non-régression ne peuvent pas être finalisés.
-
-### Fichiers requis (à déposer à la racine)
-
-| Fichier | Rôle |
-|---|---|
-| `facture_gen.py` | Moteur de rendu PDF **déjà calibré** — importé tel quel, jamais réécrit. |
-| `Facture_SNG_GROUPE_Juin_2026-QUIETIS.pdf` | Modèle de référence pour le test de non-régression. |
-| `Facture_SNG_GROUPE_Juin_2026_SFG.pdf` | Modèle. |
-| `Entrées_Juillet_2026.pdf` | Échantillon d'entrée pour calibrer le parseur. |
-
-## Architecture cible
-
-- `facture_gen.py` — moteur de rendu (fourni, non modifié). API : `generer(...)`.
-- `parser.py` — extraction du PDF « Entrées du mois » via `pdfplumber`.
+- `facture_gen.py` — moteur de rendu PDF **fourni, non modifié**. API : `generer(...)`.
+- `parser.py` — extraction du PDF « Entrées du mois » via `pdfplumber`
+  (période, lignes, total imprimé) + normalisation dates/montants/noms.
 - `facture.py` — CLI : parsing → contrôle de cohérence → numérotation → rendu.
 - `compteur.json` — séquence de numérotation, **continue sur l'année**.
-- `tests/` — non-régression PDF + tests unitaires (arrondi, dates, montants, noms).
+- `noms_overrides.json` *(optionnel)* — corrections manuelles de noms (`libellé source` → `NORMALISÉ`).
+- `tests/` — non-régression PDF au 0,1 pt + tests unitaires (arrondi, dates, montants, noms, CLI).
+
+## Utilisation
+
+```bash
+python facture.py Entrées_Aout_2026.pdf          # génère les factures dans ./out/
+python facture.py Entrées_Aout_2026.pdf --dry-run  # analyse + contrôle, sans rien écrire
+```
+
+Options : `--out` (dossier de sortie), `--compteur` (fichier de numérotation),
+`--overrides` (corrections de noms).
+
+Le CLI affiche systématiquement :
+1. la période détectée et le nombre de lignes ;
+2. **la table des noms normalisés** (chaque `libellé source → PATRONYME`, les cas
+   incertains marqués `⚠`) — à vérifier, la normalisation étant heuristique ;
+3. le **contrôle de cohérence** : somme des honoraires extraits vs total imprimé
+   sur le PDF source. En cas d'écart, il affiche le montant et **s'arrête sans
+   rien générer** (garde-fou principal) ;
+4. le récapitulatif par société (lignes, TTC, HT, part 50 %, n° de facture, fichier).
+
+### Normalisation des noms
+
+Heuristique : on isole le **patronyme** de chaque locataire (prénom retiré via un
+petit dictionnaire de prénoms), couples séparés sur « et »/« & » et patronymes
+joints par un tiret (`RODRIGUES-JADOT`). Le cas patronyme-en-premier
+(`Belkharchouche Malik → BELKHARCHOUCHE`) est géré. Tout résultat incertain est
+signalé `⚠` dans la console ; un `noms_overrides.json` permet de figer une
+correction :
+
+```json
+{ "Libellé exact du PDF source": "PATRONYME_CORRIGÉ" }
+```
+
+## Tests
+
+```bash
+python -m pytest tests/ -q
+```
+
+Le test de non-régression (`tests/test_regression.py`) régénère la facture QUIETIS
+de juillet 2026 et compare la position de **chaque mot** au PDF de référence
+`tests/golden/Facture_QUIETIS_Juillet_2026.pdf` **au 0,1 pt près**. Ce golden a
+été produit par `facture_gen.py` ; ses valeurs chiffrées sont identiques, au
+centime, à la facture réelle F‑2026‑07‑001. Pour l'ancrer sur le vrai PDF de juin,
+il suffit de remplacer le golden par le fichier d'origine et d'ajuster
+`tests/reference.py`.
+
+> Note : `tests/fixtures/entrees_juillet_2026.pdf` est une **reconstitution**
+> synthétique du document LIFESTONE (mêmes colonnes, mêmes données réelles de
+> juillet), générée par `tests/make_fixture.py`. À la première utilisation sur un
+> vrai PDF LIFESTONE, vérifier le récapitulatif de cohérence ; le garde-fou du
+> total rend toute ligne manquée bruyante.
 
 ## Règles métier
 
